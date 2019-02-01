@@ -38,13 +38,28 @@
 
 // The delay to wait between button presses.
 #define BUTTON_DELAY 100
+#define CONFIG_DELAY 500
+#define RESET_DELAY 1000
+
+// Data structure for config options
+struct Config {
+    bool skunk;
+    int score;
+};
 
 // Create the main display instance.
 Adafruit_SSD1306 display = Adafruit_SSD1306();
 
 // set up scores
-int blue = 0;
-int red = 0;
+int black = 0;
+int white = 0;
+
+// Config options.
+bool doConfig = false;
+Config configOptions = {false, 21};
+
+// Timing for events.
+unsigned long previousTime = 0;
 
 void setup() {
     // Give the display a second to start up.
@@ -66,19 +81,37 @@ void setup() {
     display.setTextSize(2);
     display.setTextColor(WHITE, BLACK);
     display.setCursor(0, 0);
-    display.println("A  Red: ");
-    display.println("B Blue: ");
+    display.println("Black: ");
+    display.println("White: ");
     display.display();
 }
 
 void displayScores() {
     display.setCursor(0, 0);
-    display.print("A  Red: ");
-    display.print(red);
+    display.print("Black: ");
+    display.print(black);
     display.println("   ");
-    display.print("B Blue: ");
-    display.print(blue);
+    display.print("White: ");
+    display.print(white);
     display.println("   ");
+    display.display();
+}
+
+void displayConfig() {
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println("***CONFIG***");
+
+    display.print("Skunk:   ");
+    if (configOptions.skunk) {
+        display.println("ON  ");
+    } else {
+        display.println("OFF ");
+    }
+
+    display.print("Play to: ");
+    display.println(configOptions.score);
+
     display.display();
 }
 
@@ -90,9 +123,13 @@ void resetDisplay() {
 }
 
 bool hasSkunk() {
-    if (red == 0 && blue >= 11) {
+    if (!configOptions.skunk) {
+        return false;
+    }
+
+    if (white == 0 && black >= 11) {
         return true;
-    } else if (blue == 0 && red >= 11) {
+    } else if (black == 0 && white >= 11) {
         return true;
     }
 
@@ -105,9 +142,9 @@ void displaySkunk() {
 }
 
 bool hasWin() {
-    if (red >= 21 && red > (blue + 1)) {
+    if (white >= configOptions.score && white > (black + 1)) {
         return true;
-    } else if (blue >= 21 && blue > (red + 1)) {
+    } else if (black >= configOptions.score && black > (white + 1)) {
         return true;
     }
 
@@ -115,30 +152,73 @@ bool hasWin() {
 }
 
 void displayWin() {
-    if (red < blue) {
-        display.print("Blue ");
+    if (white < black) {
+        display.print("Black ");
     } else {
-        display.print("Red ");
+        display.print("White ");
     }
     display.println("Wins!");
     display.display();
 }
 
-void loop() {
+void configLoop() {
+    bool doDelay = false;
+
+    // Check the button states
+    if (LOW == digitalRead(BUTTON_C)) {
+        delay(BUTTON_DELAY);
+        if (LOW == digitalRead(BUTTON_C)) {
+            doConfig = false;
+            resetDisplay();
+        }
+    } else {
+        if (LOW == digitalRead(BUTTON_A)) {
+            if (configOptions.skunk) {
+                configOptions.skunk = false;
+            } else {
+                configOptions.skunk = true;
+            }
+        } else if (LOW == digitalRead(BUTTON_B)) {
+            // Values go 21 -> 30 -> 50
+            if (21 == configOptions.score) {
+                configOptions.score = 30;
+            } else if (30 == configOptions.score) {
+                configOptions.score = 50;
+            } else {
+                configOptions.score = 21;
+            }
+        }
+
+        doDelay = true;
+    }
+
+    displayConfig();
+
+    if (doDelay) {
+      delay(BUTTON_DELAY);
+    }
+}
+
+
+function resetScore() {
+  white = 0;
+  black = 0;
+}
+
+void scoreLoop() {
     bool doDelay = false;
 
     // Button C is a reset.
     if (LOW == digitalRead(BUTTON_C)) {
-        red = 0;
-        blue = 0;
+        resetScore();
         display.setTextSize(2);
     } else {
         // Read the state of the buttons.
         if (LOW == digitalRead(BUTTON_A)) {
-            red++;
+            black++;
             doDelay = true;
         } else if (LOW == digitalRead(BUTTON_B)) {
-            blue++;
+            white++;
             doDelay = true;
         }
     }
@@ -155,5 +235,25 @@ void loop() {
 
     if (doDelay) {
         delay(BUTTON_DELAY);
+    }
+}
+
+void handleButtonC() {
+    unsigned long currentTime = millis();
+    unsigned long difference = 0;
+
+    // Check for button C being held down.
+    if (LOW != digitalRead(BUTTON_C)) {
+        previousTime = currentTime;
+    }
+}
+
+void loop() {
+    handleButtonC();
+
+    if (doConfig) {
+        configLoop();
+    } else {
+        scoreLoop();
     }
 }
